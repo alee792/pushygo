@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -62,7 +63,7 @@ func (c *Chrome) GetYT(w http.ResponseWriter, r *http.Request) {
 func (c *Chrome) GetKibana(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "Getting Kibana.")
-	url := ""
+	url := os.Getenv("KIBANA")
 
 	err := c.navigate(url)
 	if err != nil {
