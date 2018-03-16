@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -16,6 +17,11 @@ import (
 var c *chromedp.CDP
 var cancelChan chan struct{}
 var reloadActive = false
+
+const (
+	trueS  = "true"
+	falseS = "false"
+)
 
 func init() {
 	log.SetLevel(log.DebugLevel)
@@ -48,7 +54,6 @@ type Opts struct {
 
 // GetYT handles GET requests to the /youtube/{id} endpoint
 func (c *Chrome) GetYT(w http.ResponseWriter, r *http.Request) {
-
 	fmt.Fprintf(w, "Getting Youtube.")
 	params := mux.Vars(r)
 
@@ -61,7 +66,6 @@ func (c *Chrome) GetYT(w http.ResponseWriter, r *http.Request) {
 
 // GetKibana handles GET requests to the /kibana/ endpoint
 func (c *Chrome) GetKibana(w http.ResponseWriter, r *http.Request) {
-
 	fmt.Fprintf(w, "Getting Kibana.")
 	url := os.Getenv("KIBANA")
 
@@ -73,9 +77,8 @@ func (c *Chrome) GetKibana(w http.ResponseWriter, r *http.Request) {
 
 // GetURL handles GET requests to the /url/{http/s} endpoint
 func (c *Chrome) GetURL(w http.ResponseWriter, r *http.Request) {
-
 	params := mux.Vars(r)
-	fmt.Fprintf(w, "Getting URL %s.", params["url"])
+	fmt.Fprintf(w, "Getting URL %s.\n", params["url"])
 	protocol := params["protocol"]
 	if protocol == "" {
 		protocol = "https"
@@ -85,11 +88,11 @@ func (c *Chrome) GetURL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error(err)
 	}
+	c.setReload(&w, r)
 }
 
 // PostURL handles POST requests to the /url/ endpoint
 func (c *Chrome) PostURL(w http.ResponseWriter, r *http.Request) {
-
 	log.Info("POST navigating to url")
 
 	var urlRequest URLRequest
@@ -154,6 +157,7 @@ func main() {
 	router.HandleFunc("/url", c.PostURL).Methods("POST")
 	router.HandleFunc("/fullscreen", c.GetFullscreen).Methods("GET")
 	router.HandleFunc("/reload", c.GetReload).Methods("GET")
+	router.Path("/url/{protocol}/{url}").Queries("reloadSeconds", "/[0-9]+/", "fullscreen", "^(?i)(true|false)$").HandlerFunc(c.GetURL).Methods("POST")
 	log.Infof("Listening on %s", port)
 	log.Fatal(http.ListenAndServe(port, router))
 }
@@ -167,7 +171,6 @@ func cancelReload() {
 }
 
 func (c *Chrome) navigate(url string) error {
-
 	cancelReload()
 	return c.CDP.Run(*c.Context, chromedp.Tasks{chromedp.Navigate(url)})
 }
@@ -212,4 +215,28 @@ func (c *Chrome) reloadInterval(interval time.Duration) (err error) {
 		}
 	}()
 	return
+}
+
+func (c *Chrome) setReload(w *http.ResponseWriter, r *http.Request) {
+	var reload time.Duration
+	reloadSeconds, err := strconv.Atoi(r.FormValue("reloadSeconds"))
+	if err != nil {
+		fmt.Fprint(*w, err.Error())
+		fmt.Fprintf(*w, "Error parsing reloadSeconds, must be valid integer.\nSetting default of 5 minutes.\n")
+		reload = time.Minute * 5
+	} else {
+		reload = time.Duration(reloadSeconds) * time.Second
+	}
+	if reload > 0 {
+		fmt.Fprintf(*w, "Reload set to every %d seconds.\n", reload/time.Second)
+		err := c.reloadInterval(reload)
+		if err != nil {
+			fmt.Fprint(*w, "Failed to set reload\n")
+			log.Error(err)
+		}
+	}
+}
+
+func (c *Chrome) setFullscreen(w *http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(*w, "Jokes on you, you can't force a fullscreen")
 }
