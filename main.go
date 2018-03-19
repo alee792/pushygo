@@ -102,6 +102,7 @@ func (c *Chrome) PostURL(w http.ResponseWriter, r *http.Request) {
 
 	log.Infof("%+v\n", urlRequest)
 
+	c.navigate(url)
 	if urlRequest.Fullscreen == 1 {
 		log.Info("Entering fullscreen")
 		c.fullscreen()
@@ -110,7 +111,6 @@ func (c *Chrome) PostURL(w http.ResponseWriter, r *http.Request) {
 		log.Info("Hiding Scrollbar")
 		c.hideScrollbar()
 	}
-	c.navigate(url)
 	if urlRequest.ReloadSeconds > 0 {
 		fmt.Fprintf(w, "Reload set to every %d seconds.", urlRequest.ReloadSeconds)
 		err := c.reloadInterval(time.Duration(urlRequest.ReloadSeconds) * time.Second)
@@ -172,7 +172,8 @@ func cancelReload() {
 
 func (c *Chrome) navigate(url string) error {
 	cancelReload()
-	return c.CDP.Run(*c.Context, chromedp.Tasks{chromedp.Navigate(url)})
+	log.Infof("Navigating to %s", url)
+	return c.CDP.Run(*c.Context, chromedp.Tasks{chromedp.Navigate(url), chromedp.Sleep(1 * time.Second)})
 }
 
 func (c *Chrome) fullscreen() error {
